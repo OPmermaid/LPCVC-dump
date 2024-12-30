@@ -10,40 +10,39 @@ from torchvision import transforms
 
 
 class NaturalDisasterDataset(Dataset):
-    def __init__(self, root, mean, std, phase="train"):
+    def __init__(self, root_img, root_gt, mean, std, phase="train"):
         super().__init__()
-
-        self.root = root
+        self.root_img = root_img  # Path to images
+        self.root_gt = root_gt    # Path to ground truth masks
         self.phase = phase
-
         self.mean, self.std = mean, std
 
         if self.phase in ["train", "val"]:
-            self.image_names = os.listdir(os.path.join(self.root, "images"))
+            if not os.path.exists(self.root_img) or not os.path.exists(self.root_gt):
+                raise FileNotFoundError(
+                    f"Paths {self.root_img} or {self.root_gt} do not exist."
+                )
+            self.image_names = os.listdir(self.root_img)
         else:
-            self.image_names = os.listdir(os.path.join(self.root))
+            if not os.path.exists(self.root_img):
+                raise FileNotFoundError(f"Root directory {self.root_img} does not exist.")
+            self.image_names = os.listdir(self.root_img)
 
     def __getitem__(self, index):
-        if self.phase in ["train", "val"]:
-            x_path = os.path.join(self.root, "images", self.image_names[index])
-            y_path = os.path.join(self.root, "masks", self.image_names[index])
-
+        try:
+            x_path = os.path.join(self.root_img, self.image_names[index])
+            y_path = os.path.join(self.root_gt, self.image_names[index])
             x = Image.open(x_path)
             y = Image.open(y_path).convert("L")
+        except Exception as e:
+            print(f"Error loading files: {x_path}, {y_path}. Exception: {e}")
+            raise e
+        return self.apply_transforms(x, y)
 
-            return self.apply_transforms(x, y)
-
-        else:
-            x_path = os.path.join(self.root, self.image_names[index])
-            x = Image.open(x_path)
-
-            return self.apply_transforms(x)
 
     def __len__(self):
-        if self.phase in ["train", "val"]:
-            return len(os.listdir(os.path.join(self.root, "images")))
-        else:
-            return len(os.listdir(os.path.join(self.root)))
+        return len(self.image_names)
+
 
     def apply_transforms(self, x, y=None):
         if self.phase == "train":
@@ -74,7 +73,8 @@ class NaturalDisasterDataset(Dataset):
             )
             y_transforms = None
 
-        seed = np.random.randint(23412304981723094)
+        # Fix for random seed range
+        seed = np.random.randint(0, 2147483647)
 
         random.seed(seed)
         torch.manual_seed(seed)
@@ -92,9 +92,25 @@ class NaturalDisasterDataset(Dataset):
             return x
 
 
-def get_train_data_loaders(root_dir, validation_split, batch_size):
+def get_train_data_loaders(img_dir, gt_dir, validation_split, batch_size):
+    """
+    Returns training and validation data loaders.
+
+    Args:
+        img_dir (str): Path to the image directory.
+        gt_dir (str): Path to the ground truth masks directory.
+        validation_split (float): Fraction of data to use for validation.
+        batch_size (int): Batch size.
+
+    Returns:
+        tuple: Training and validation data loaders.
+    """
+    # num_workers=os.cpu_count()
+    num_workers=10
+
     images_ds = NaturalDisasterDataset(
-        root=root_dir,
+        root_img=img_dir,
+        root_gt=gt_dir,
         mean=[0.46077183, 0.45584197, 0.41929824],
         std=[0.18551224, 0.17078055, 0.17699541],
         phase="train",
@@ -107,13 +123,14 @@ def get_train_data_loaders(root_dir, validation_split, batch_size):
     train_ds, val_ds = random_split(images_ds, ds_lengths)
 
     train_data_loader = DataLoader(
-        train_ds, batch_size=batch_size, shuffle=True, num_workers=os.cpu_count()
+        train_ds, batch_size=batch_size, shuffle=True, num_workers=num_workers, timeout=60, persistent_workers=True
     )
     val_data_loader = DataLoader(
-        val_ds, batch_size=batch_size, shuffle=False, num_workers=os.cpu_count()
+        val_ds, batch_size=batch_size, shuffle=False, num_workers=num_workers, timeout=60, persistent_workers=True
     )
 
     return train_data_loader, val_data_loader
+
 
 
 def get_test_data_loaders(root_dir):

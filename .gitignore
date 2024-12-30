@@ -2,3 +2,9 @@
 .env
 
 data/
+playground/checkpoints/
+utils/__pycache__/
+
+
+
+
