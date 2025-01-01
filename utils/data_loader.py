@@ -123,10 +123,10 @@ def get_train_data_loaders(img_dir, gt_dir, validation_split, batch_size):
     train_ds, val_ds = random_split(images_ds, ds_lengths)
 
     train_data_loader = DataLoader(
-        train_ds, batch_size=batch_size, shuffle=True, num_workers=num_workers, timeout=60, persistent_workers=True
+        train_ds, batch_size=batch_size, shuffle=True, num_workers=num_workers, timeout=60, persistent_workers=False
     )
     val_data_loader = DataLoader(
-        val_ds, batch_size=batch_size, shuffle=False, num_workers=num_workers, timeout=60, persistent_workers=True
+        val_ds, batch_size=batch_size, shuffle=False, num_workers=num_workers, timeout=60, persistent_workers=False
     )
 
     return train_data_loader, val_data_loader
